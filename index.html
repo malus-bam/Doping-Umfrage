@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Doping-Umfrage</title>
+  <style>
+    body {
+      background-color: #333; /* Dunkelgrauer Hintergrund */
+      color: #fff;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .buttons {
+      margin-bottom: 20px;
+    }
+    button {
+      font-size: 18px;
+      margin: 10px;
+      padding: 10px 20px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+    }
+    .chart-container {
+      width: 300px;
+      height: 300px;
+    }
+    #myChart {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+
+  <!-- Chart.js für Tortendiagramm -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <h1>Denkt ihr Doping im Leistungssport macht Sinn?</h1>
+
+  <div class="buttons">
+    <button id="voteNo" style="background-color: #c0392b; color: #fff;">Eher Nein</button>
+    <button id="voteYes" style="background-color: #27ae60; color: #fff;">Eher Ja</button>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="myChart"></canvas>
+  </div>
+
+  <script>
+    /*************************************************************
+     * 1) Bin-ID und API-Key als Strings mit Anführungszeichen!
+     *************************************************************/
+    const BIN_ID = "67bf2f5cacd3cb34a8f14291"; 
+    const API_KEY = "$2a$10$GPtUnIM30qaH45WANrgcaOl7GhvwM/Jq47aOxL.hhNgTG0LdMToAa";
+
+    // URL zum GET und PUT (Version 3 der API):
+    const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+
+    // Chart-Variable global, damit wir sie aktualisieren können
+    let myChart;
+
+    // Einmal-Abstimmung pro Browser (über localStorage)
+    if(localStorage.getItem('dopingVoted')) {
+      document.getElementById('voteNo').disabled = true;
+      document.getElementById('voteYes').disabled = true;
+    }
+
+    // Funktion: Daten vom JSONbin holen und Diagramm anzeigen
+    async function loadAndRenderChart() {
+      try {
+        const response = await fetch(JSONBIN_URL, {
+          method: 'GET',
+          headers: {
+            'X-Master-Key': API_KEY
+          }
+        });
+        const jsonData = await response.json();
+        const data = jsonData.record;  // { yes: 0, no: 0 }
+
+        renderChart(data.yes, data.no);
+
+      } catch (error) {
+        console.error("Fehler beim Laden:", error);
+      }
+    }
+
+    // Funktion: Stimmen hochzählen und zum Server (JSONbin) schreiben
+    async function vote(option) {
+      try {
+        // 1) Aktuelle Werte laden
+        const response = await fetch(JSONBIN_URL, {
+          method: 'GET',
+          headers: {
+            'X-Master-Key': API_KEY
+          }
+        });
+        const jsonData = await response.json();
+        const data = jsonData.record; // { yes: 0, no: 0 }
+
+        // 2) Hochzählen
+        if(option === 'yes') data.yes++;
+        if(option === 'no')  data.no++;
+
+        // 3) Neue Werte per PUT speichern
+        await fetch(JSONBIN_URL, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Master-Key': API_KEY
+          },
+          body: JSON.stringify(data)
+        });
+
+        // 4) localStorage-Flag setzen und Buttons deaktivieren
+        localStorage.setItem('dopingVoted', 'true');
+        document.getElementById('voteNo').disabled = true;
+        document.getElementById('voteYes').disabled = true;
+
+        // 5) Diagramm aktualisieren
+        renderChart(data.yes, data.no);
+
+      } catch (error) {
+        console.error("Fehler beim Speichern:", error);
+      }
+    }
+
+    // Funktion: Chart.js-Diagramm erstellen/aktualisieren
+    function renderChart(yesCount, noCount) {
+      if (myChart) {
+        // Wenn schon vorhanden, Daten aktualisieren
+        myChart.data.datasets[0].data = [noCount, yesCount];
+        myChart.update();
+      } else {
+        // Neues Diagramm erstellen
+        const ctx = document.getElementById('myChart').getContext('2d');
+        myChart = new Chart(ctx, {
+          type: 'pie',
+          data: {
+            labels: ['Nein', 'Ja'],
+            datasets: [{
+              label: 'Stimmen',
+              data: [noCount, yesCount],
+              backgroundColor: ['#c0392b', '#27ae60']
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                labels: {
+                  color: '#fff'
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+
+    // Event-Listener für Buttons
+    document.getElementById('voteNo').addEventListener('click', () => vote('no'));
+    document.getElementById('voteYes').addEventListener('click', () => vote('yes'));
+
+    // Beim Laden der Seite einmalig das Diagramm laden
+    loadAndRenderChart();
+  </script>
+</body>
+</html>
